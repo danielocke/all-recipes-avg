@@ -20,9 +20,6 @@ TAG_INGR_QUANTITY   = "data-ingredient-quantity"
 TAG_INGR_UNIT       = "data-ingredient-unit"
 TAG_INGR_NAME       = "data-ingredient-name"
 
-#Dictionary to store ingredients and quantities  
-ingredients = {}
-
 def search(query):
 
     offset = 0
@@ -85,7 +82,7 @@ def extractIngredients(recipe_s):
     for ing_s in ingredients_s:
 
         try:
-            quantity = ing_s.find("span",{TAG_INGR_QUANTITY:"true"}).string
+            quantity = strToNum(ing_s.find("span",{TAG_INGR_QUANTITY:"true"}).string)
         except:
             quantity = None
         try:
@@ -109,25 +106,41 @@ def extractSteps(recipe_s):
 def getRating(recipe_s):
     return float(recipe_s.find("div",{"id":ID_RECIPE_RATING}).string)
 
-def catagorizeIngredients(ingList, rating):
-
+def catagorizeIngredients(ingList, rating, destList):
     for curIng in ingList:
-        for ing in ingredients:
+        for ing in destList:
             if jellyfish.jaro_similarity(curIng[1].lower(),ing.lower()) > ING_SIM_ALLOWANCE:
-                ingredients[ing] += curIng[0]*rating
-                return 
-    ingredients[curIng[1]] = curIng[0]*rating  
+                destList[ing] += curIng[0]*rating
+                break
+            destList[curIng[1]] = curIng[0]*rating  
 
 def convertIngQuantity(ingList):
-    units = {"cup":250,"c":250,
-             "gram":1,"g":1,
-             "millilitre":1,"ml":1,
-             "milligram":1/1000,"mg":1/1000,
-             "litre":1000, "l":1000,
-             "tablespoon":15,"tbsp":15,
+    newIngList = []
+    noUnitList = []
+    units = {"cup":250.0,"c":250.0,
+             "gram":1.0,"g":1.0,
+             "millilitre":1.0,"ml":1.0,
+             "milligram":1.0/1000.0,"mg":1.0/1000.0,
+             "litre":1000.0, "l":1000.0,
+             "tablespoon":15.0,"tbsp":15.0,
              "teaspoon":5,"tsp":5}
-    #for ing in ingList:
+    for ing in ingList:
+        if not ing[1] == None:
+            closest = ""
+            closestSim = 0.0
+            for unit in units:
+                curSim = jellyfish.jaro_similarity(ing[1],unit)
+                if curSim > closestSim and curSim > UNIT_SIM_ALLOWANCE:
+                    closest = unit
+                    closestSim = curSim
+            if closest == "":
+                raise ValueError
+            newIngList.append((float(ing[0])*units[closest],ing[2]))
 
+        else:
+            noUnitList.append((float(ing[0]),ing[2]))
+    
+    return (newIngList,noUnitList)
 
 def strToNum(string):
     fracDict = {"½":1/2,"⅓":1/3,"⅔":2/3,"¼":1/4,"¾":3/4,"⅛":1/8,"⅜":3/8,"⅝":5/8,"⅞":7/8}
@@ -149,15 +162,31 @@ def strToNum(string):
         except:
             return None
 
+def findAverageRatio(query):
+    #Dictionary to store ingredients and quantities  
+    ingredients = {}
+    noUnitIngredients = {}
+
+    recipeURLs = search(query)
+    recipes = getRecipes(recipeURLs)
+
+    for recipe in recipes:
+        try:
+            ingList = extractIngredients(recipe)
+            rating = getRating(recipe)
+
+            ingList = convertIngQuantity(ingList)
+            catagorizeIngredients(ingList[0],rating,ingredients)
+            catagorizeIngredients(ingList[1],rating,noUnitIngredients)
+        #except TypeError:
+            #print("TYPE ERROR")
+        except ValueError:
+            print("VALUE ERROR")
+    print(ingredients)
+
+
 #RUNNER SECTION
 start = time.time()
-recipeURLs = search("sushi")
-recipes = getRecipes(recipeURLs)
-
-for recipe in recipes:
-    print(str(getRating(recipe)) + " - " + str(extractIngredients(recipe)))
-
+findAverageRatio("sushi")
 end = time.time()
 print("Time: " + str(end-start))
-print("Recipes collected: "  + str(len(recipes)))
-
