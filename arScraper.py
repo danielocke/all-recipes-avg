@@ -7,8 +7,8 @@ import jellyfish
 RESULT_OFFSET_SIZE = 24
 
 #Allowed Jaro similarity between two strings for them to be considered the same ingredient/unit.
-ING_SIM_ALLOWANCE = 0.25
-UNIT_SIM_ALLOWANCE = 0.35
+ING_SIM_ALLOWANCE = 0.15
+UNIT_SIM_ALLOWANCE = 0.5
 
 #HTML classes/id tags used by allRecipes
 CLASS_RECIPE_CARD   = "comp mntl-card-list-items mntl-document-card mntl-card card card--no-image"
@@ -112,20 +112,22 @@ def catagorizeIngredients(ingList, rating, destList):
             if jellyfish.jaro_similarity(curIng[1].lower(),ing.lower()) > ING_SIM_ALLOWANCE:
                 destList[ing] += curIng[0]*rating
                 break
-            destList[curIng[1]] = curIng[0]*rating  
+        destList[curIng[1]] = curIng[0]*rating  
 
 def convertIngQuantity(ingList):
     newIngList = []
     noUnitList = []
-    units = {"cup":250.0,"c":250.0,
+    units = {"cup":250.0,
              "gram":1.0,"g":1.0,
              "millilitre":1.0,"ml":1.0,
              "milligram":1.0/1000.0,"mg":1.0/1000.0,
              "litre":1000.0, "l":1000.0,
              "tablespoon":15.0,"tbsp":15.0,
-             "teaspoon":5,"tsp":5}
+             "teaspoon":5,"tsp":5,
+             "ounce":29,"oz":29,
+             "clove":15}
     for ing in ingList:
-        if not ing[1] == None:
+        if not (ing[1] == None or ing[0] == None or isRejectUnit(ing[1])):
             closest = ""
             closestSim = 0.0
             for unit in units:
@@ -135,11 +137,15 @@ def convertIngQuantity(ingList):
                     closestSim = curSim
             if closest == "":
                 raise ValueError
+            print(str(ing[1]) + " : " + str(closest) + "\n")
             newIngList.append((float(ing[0])*units[closest],ing[2]))
 
-        else:
+        elif not ing[0] == None:
             noUnitList.append((float(ing[0]),ing[2]))
     
+        else:
+            noUnitList.append((None,ing[2]))
+
     return (newIngList,noUnitList)
 
 def strToNum(string):
@@ -162,6 +168,13 @@ def strToNum(string):
         except:
             return None
 
+def isRejectUnit(unit):
+    rejUnits = ["small","medium","large","pinch"]
+    for rej in rejUnits:
+        if unit.contains(rej):
+            return True
+    return False
+
 def findAverageRatio(query):
     #Dictionary to store ingredients and quantities  
     ingredients = {}
@@ -176,17 +189,16 @@ def findAverageRatio(query):
             rating = getRating(recipe)
 
             ingList = convertIngQuantity(ingList)
+
             catagorizeIngredients(ingList[0],rating,ingredients)
             catagorizeIngredients(ingList[1],rating,noUnitIngredients)
-        #except TypeError:
-            #print("TYPE ERROR")
-        except ValueError:
-            print("VALUE ERROR")
-    print(ingredients)
-
+        except:
+            print("ERROR")
+    print("\nIngredients: " + str(ingredients))
+    print("\nNU Ingredients: " + str(noUnitIngredients))
 
 #RUNNER SECTION
 start = time.time()
-findAverageRatio("sushi")
+findAverageRatio("crab cake")
 end = time.time()
 print("Time: " + str(end-start))
